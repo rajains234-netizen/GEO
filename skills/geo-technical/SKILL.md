@@ -279,7 +279,7 @@ AI crawlers (GPTBot, PerplexityBot, ClaudeBot, etc.) do **NOT execute JavaScript
 Even Googlebot, which does execute JavaScript, deprioritizes JS-rendered content due to the additional crawl budget required. Google processes JS rendering in a separate "rendering queue" that can delay indexing by days or weeks.
 
 ### Detection Method
-1. Fetch the page with curl (no JavaScript execution): `curl -s [URL]`
+1. Fetch the page with curl (no JavaScript execution): `curl --max-time 10 --connect-timeout 5 -s [URL]`
 2. Compare the raw HTML to the rendered DOM (via browser)
 3. If key content (headings, paragraphs, product info, article text) is MISSING from the curl output, the site relies on client-side rendering
 
@@ -319,7 +319,7 @@ Even Googlebot, which does execute JavaScript, deprioritizes JS-rendered content
 
 ### 8.1 Time to First Byte (TTFB)
 - Target: **< 800ms** (ideally < 200ms)
-- Measure with curl: `curl -o /dev/null -s -w 'TTFB: %{time_starttransfer}s\n' [URL]`
+- Measure with curl: `curl --max-time 10 --connect-timeout 5 -o /dev/null -s -w 'TTFB: %{time_starttransfer}s\n' [URL]`
 - If TTFB > 800ms: check server location, caching, database queries, CDN usage
 
 ### 8.2 Resource Optimization

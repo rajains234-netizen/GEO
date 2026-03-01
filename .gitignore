@@ -16,6 +16,7 @@ env/
 .env/
 .env
 .env.*
+!.env.example
 
 # IDE
 .vscode/
@@ -54,6 +55,13 @@ screenshots/
 # Test files
 test_output/
 .pytest_cache/
+
+# SaaS app
+reports/
+geo_saas.db
+geo-audit-data.json
+frontend/node_modules/
+frontend/dist/
 
 # OS
 Thumbs.db

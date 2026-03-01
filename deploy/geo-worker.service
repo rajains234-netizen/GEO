@@ -1,0 +1,15 @@
+[Unit]
+Description=GEO Score Celery Worker
+After=network.target redis.service
+
+[Service]
+User=geo
+Group=geo
+WorkingDirectory=/var/www/geo
+ExecStart=/var/www/geo/venv/bin/celery -A app.celery_app worker --loglevel=info --concurrency=2
+Restart=always
+RestartSec=5
+EnvironmentFile=/var/www/geo/.env
+
+[Install]
+WantedBy=multi-user.target

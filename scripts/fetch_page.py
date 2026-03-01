@@ -34,7 +34,7 @@ DEFAULT_HEADERS = {
 }
 
 
-def fetch_page(url: str, timeout: int = 30) -> dict:
+def fetch_page(url: str, timeout: int = 10) -> dict:
     """Fetch a page and return structured analysis data."""
     result = {
         "url": url,
