@@ -350,6 +350,142 @@ def make_table_style(header_color=PRIMARY):
     ])
 
 
+# Minimum character count for the Claude full_report to be rendered in the PDF.
+# Reports shorter than this are likely empty or error placeholders.
+_MIN_CLAUDE_REPORT_LENGTH = 100
+
+
+def _escape_xml(text: str) -> str:
+    """Escape characters that are special in ReportLab's XML markup."""
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _apply_inline_markup(text: str) -> str:
+    """Convert markdown inline markup (**bold**, *italic*) to ReportLab XML tags.
+
+    Bold is matched first using a pattern that requires exactly two asterisks
+    (not three or more) so that triple-star sequences do not produce malformed
+    output.  Italic is then matched against the result using the same guard, so
+    any remaining single stars are handled independently of the bold tags.
+
+    The input is expected to have already been passed through _escape_xml(), so
+    no additional XML-escaping is required inside the captured groups.
+    """
+    import re
+    # Match **bold** only when the delimiters are not flanked by another star.
+    text = re.sub(r'(?<!\*)\*\*(?!\*)(.+?)(?<!\*)\*\*(?!\*)', r'<b>\1</b>', text)
+    # Match *italic* only when the delimiters are not flanked by another star.
+    text = re.sub(r'(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)', r'<i>\1</i>', text)
+    return text
+
+
+def render_markdown_section(md_text: str, styles: object) -> list:
+    """
+    Convert a markdown string into a list of ReportLab Flowable elements.
+
+    Handles headings (##, ###), bullet lists (- / *), fenced code blocks,
+    and regular paragraphs.  Bold (**) and italic (*) inline markup is
+    preserved via ReportLab XML tags.
+    """
+    elements = []
+    lines = md_text.splitlines()
+    paragraph_lines = []
+    in_code_block = False
+    code_lines = []
+
+    code_style = ParagraphStyle(
+        name='CodeBlock',
+        fontName='Courier',
+        fontSize=8,
+        textColor=TEXT_PRIMARY,
+        backColor=MEDIUM_BG,
+        spaceBefore=4,
+        spaceAfter=4,
+        leading=12,
+        leftIndent=10,
+        rightIndent=10,
+        borderPadding=6,
+    )
+
+    def flush_paragraph():
+        """Emit any accumulated paragraph lines as a single BodyText element."""
+        if paragraph_lines:
+            combined = " ".join(paragraph_lines).strip()
+            if combined:
+                safe = _apply_inline_markup(_escape_xml(combined))
+                elements.append(Paragraph(safe, styles['BodyText_Custom']))
+            paragraph_lines.clear()
+
+    for line in lines:
+        # Fenced code block toggle
+        if line.startswith("```"):
+            if in_code_block:
+                # End of code block — render collected lines
+                in_code_block = False
+                if code_lines:
+                    for cl in code_lines:
+                        elements.append(Paragraph(_escape_xml(cl), code_style))
+                    elements.append(Spacer(1, 4))
+                code_lines.clear()
+            else:
+                flush_paragraph()
+                in_code_block = True
+            continue
+
+        if in_code_block:
+            code_lines.append(line)
+            continue
+
+        # H1 / H2 heading
+        if line.startswith("## "):
+            flush_paragraph()
+            heading_text = _apply_inline_markup(_escape_xml(line[3:].strip()))
+            elements.append(Spacer(1, 8))
+            elements.append(Paragraph(heading_text, styles['SectionHeader']))
+            elements.append(HRFlowable(width="100%", thickness=0.5, color=ACCENT, spaceAfter=6))
+            continue
+
+        # H3 / sub-heading
+        if line.startswith("### "):
+            flush_paragraph()
+            heading_text = _apply_inline_markup(_escape_xml(line[4:].strip()))
+            elements.append(Paragraph(heading_text, styles['SubHeader']))
+            continue
+
+        # H4 and below — treat as bold body text
+        if line.startswith("####"):
+            flush_paragraph()
+            heading_text = _apply_inline_markup(_escape_xml(line.lstrip("#").strip()))
+            elements.append(Paragraph(f"<b>{heading_text}</b>", styles['BodyText_Custom']))
+            continue
+
+        # Bullet list item
+        stripped = line.strip()
+        if stripped.startswith("- ") or stripped.startswith("* "):
+            flush_paragraph()
+            bullet_text = _apply_inline_markup(_escape_xml(stripped[2:]))
+            elements.append(Paragraph(f"• {bullet_text}", styles['Recommendation']))
+            continue
+
+        # Horizontal rule
+        if stripped in ("---", "***", "___"):
+            flush_paragraph()
+            elements.append(HRFlowable(width="100%", thickness=0.5, color=lightgrey, spaceAfter=4))
+            continue
+
+        # Blank line — flush accumulated paragraph
+        if not stripped:
+            flush_paragraph()
+            elements.append(Spacer(1, 4))
+            continue
+
+        # Regular text — accumulate into paragraph
+        paragraph_lines.append(stripped)
+
+    flush_paragraph()
+    return elements
+
+
 def generate_report(data, output_path="GEO-REPORT.pdf"):
     """Generate the full PDF report from audit data."""
 
@@ -398,6 +534,7 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
     content_findings = data.get("content_findings", {})
     technical_findings = data.get("technical_findings", {})
     brand_findings = data.get("brand_findings", {})
+    full_report = data.get("full_report", "")
 
     # ============================================================
     # COVER PAGE
@@ -721,6 +858,15 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
             elements.append(Paragraph(f"<b>{i}.</b> {action}", styles['Recommendation']))
 
     elements.append(PageBreak())
+
+    # ============================================================
+    # CLAUDE AI ANALYSIS (full report markdown)
+    # ============================================================
+    if full_report and len(full_report.strip()) > _MIN_CLAUDE_REPORT_LENGTH:
+        elements.append(Paragraph("Claude AI Analysis", styles['SectionHeader']))
+        elements.append(HRFlowable(width="100%", thickness=1, color=ACCENT, spaceAfter=12))
+        elements.extend(render_markdown_section(full_report, styles))
+        elements.append(PageBreak())
 
     # ============================================================
     # METHODOLOGY & GLOSSARY
