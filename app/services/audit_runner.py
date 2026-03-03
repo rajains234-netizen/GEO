@@ -443,6 +443,7 @@ def run_full_audit(url: str, output_dir: str, progress_callback=None) -> dict:
         "medium_term": medium_term,
         "strategic": strategic,
         "crawler_access": crawler_access,
+        "full_report": full_report_md or "",
     }
 
     # =====================================================================
