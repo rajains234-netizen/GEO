@@ -43,6 +43,11 @@ def startup():
     os.makedirs(settings.reports_dir, exist_ok=True)
 
 
+_static_dir = os.path.join(os.path.dirname(__file__), "static")
+os.makedirs(_static_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=_static_dir), name="static")
+
+
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "service": "geo-score-api"}

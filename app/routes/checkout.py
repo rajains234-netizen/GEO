@@ -13,7 +13,7 @@ from app.services.stripe_service import create_checkout_session
 router = APIRouter()
 
 
-@router.post("/api/checkout", response_model=CheckoutResponse)
+@router.post("/api/checkout", response_model=CheckoutResponse, response_model_by_alias=True)
 def create_checkout(request: CheckoutRequest, db: Session = Depends(get_db)):
     # Validate URL
     url = request.url.strip()
