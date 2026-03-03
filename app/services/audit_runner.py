@@ -446,6 +446,22 @@ def run_full_audit(url: str, output_dir: str, progress_callback=None) -> dict:
     }
 
     # =====================================================================
+    # PHASE 3b: Calculate lost revenue from AI invisibility
+    # =====================================================================
+    try:
+        from app.routes.lost_revenue import calculate_lost_revenue
+
+        # Derive inputs from audit data (use sensible defaults when unavailable)
+        brand_mention_rate = brand_data.get("ai_mention_rate", 0.10)
+        lost_revenue_result = calculate_lost_revenue(
+            brand_mention_rate=max(0.0, min(1.0, float(brand_mention_rate))),
+        )
+        audit_json["lost_revenue_data"] = lost_revenue_result
+    except Exception as e:
+        print(f"Lost revenue calculation error: {e}")
+        audit_json["lost_revenue_data"] = None
+
+    # =====================================================================
     # PHASE 4: Generate outputs
     # =====================================================================
 
