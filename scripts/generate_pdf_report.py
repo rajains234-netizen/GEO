@@ -350,6 +350,48 @@ def make_table_style(header_color=PRIMARY):
     ])
 
 
+def render_markdown_section(markdown_text, styles, max_width=450):
+    """Convert Claude's markdown report to ReportLab Flowable elements."""
+    if not markdown_text or len(markdown_text.strip()) < 100:
+        return []
+
+    elements = []
+    lines = markdown_text.split('\n')
+
+    for line in lines:
+        line = line.strip()
+        if not line:
+            elements.append(Spacer(1, 6))
+            continue
+
+        # Handle headings
+        if line.startswith('### '):
+            text = line[4:].strip()
+            elements.append(Paragraph(text, styles['SubHeader']))
+            elements.append(Spacer(1, 8))
+        elif line.startswith('## '):
+            text = line[3:].strip()
+            elements.append(Paragraph(text, styles['SectionHeader']))
+            elements.append(Spacer(1, 12))
+
+        # Handle bullet points
+        elif line.startswith('- '):
+            text = line[2:].strip()
+            elements.append(Paragraph(f"• {text}", styles['Recommendation']))
+            elements.append(Spacer(1, 4))
+
+        # Handle code blocks (skip markers)
+        elif line.startswith('```'):
+            continue
+
+        # Regular paragraphs
+        elif line:
+            elements.append(Paragraph(line, styles['BodyText_Custom']))
+            elements.append(Spacer(1, 6))
+
+    return elements
+
+
 def generate_report(data, output_path="GEO-REPORT.pdf"):
     """Generate the full PDF report from audit data."""
 
@@ -473,6 +515,20 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
         ))
 
     elements.append(Spacer(1, 16))
+
+    # ============================================================
+    # CLAUDE AI FULL REPORT SECTION
+    # ============================================================
+    full_report = data.get("full_report", "")
+
+    if full_report and len(full_report.strip()) > 100:
+        elements.append(PageBreak())
+        elements.append(Paragraph("Comprehensive AI Analysis", styles['SectionHeader']))
+        elements.append(HRFlowable(width="100%", thickness=1, color=ACCENT, spaceAfter=20))
+        elements.append(Spacer(1, 12))
+
+        report_elements = render_markdown_section(full_report, styles)
+        elements.extend(report_elements)
 
     # ============================================================
     # SCORE BREAKDOWN
