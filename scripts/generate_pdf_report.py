@@ -350,6 +350,51 @@ def make_table_style(header_color=PRIMARY):
     ])
 
 
+def _build_lost_revenue_pie(layers: dict, layer_labels: list, width=350, height=160):
+    """Create a simple pie chart for the 5-layer lost revenue breakdown."""
+    layer_colors = [
+        HexColor("#e94560"),
+        HexColor("#0984e3"),
+        HexColor("#00b894"),
+        HexColor("#fdcb6e"),
+        HexColor("#a29bfe"),
+    ]
+    total = sum(max(0, layers.get(k, 0)) for k, _ in layer_labels)
+    if total <= 0:
+        return None
+
+    try:
+        pie = Pie()
+        pie.x = 10
+        pie.y = 10
+        pie.width = 100
+        pie.height = 100
+        pie.data = [max(0.001, layers.get(k, 0)) for k, _ in layer_labels]
+        pie.labels = None
+        for i, color in enumerate(layer_colors):
+            pie.slices[i].fillColor = color
+            pie.slices[i].strokeColor = WHITE
+            pie.slices[i].strokeWidth = 1
+
+        d = Drawing(width, height)
+        d.add(pie)
+
+        # Legend
+        legend_x = 130
+        for i, (key, label) in enumerate(layer_labels):
+            y = height - 20 - i * 22
+            d.add(Rect(legend_x, y, 10, 10, fillColor=layer_colors[i], strokeColor=None))
+            val = max(0, layers.get(key, 0))
+            pct = (val / total * 100) if total > 0 else 0
+            d.add(String(legend_x + 14, y + 1,
+                         f"{label}: {pct:.1f}%",
+                         fontSize=7, fontName='Helvetica',
+                         fillColor=TEXT_PRIMARY, textAnchor='start'))
+        return d
+    except Exception:
+        return None
+
+
 def generate_report(data, output_path="GEO-REPORT.pdf"):
     """Generate the full PDF report from audit data."""
 
@@ -473,6 +518,104 @@ def generate_report(data, output_path="GEO-REPORT.pdf"):
         ))
 
     elements.append(Spacer(1, 16))
+
+    # ============================================================
+    # AI INVISIBILITY IMPACT (Lost Revenue)
+    # ============================================================
+    lost_revenue_data = data.get("lost_revenue_data")
+    if lost_revenue_data:
+        elements.append(Paragraph("AI Invisibility Impact", styles['SectionHeader']))
+        elements.append(HRFlowable(width="100%", thickness=1, color=HIGHLIGHT, spaceAfter=12))
+
+        elements.append(Paragraph(
+            "The following estimates quantify the revenue impact of reduced AI search visibility "
+            "using a 5-layer attribution model. Figures are based on the inputs collected during "
+            "this audit and represent projected monthly and annual losses.",
+            styles['BodyText_Custom']
+        ))
+        elements.append(Spacer(1, 10))
+
+        # Key metrics table
+        monthly = lost_revenue_data.get("monthly_lost_revenue", 0)
+        annual = lost_revenue_data.get("annual_lost_revenue", 0)
+        lost_customers = lost_revenue_data.get("lost_customers_monthly", 0)
+        confidence = lost_revenue_data.get("model_confidence", 0)
+
+        def _fmt_usd(v):
+            if v >= 1_000_000:
+                return f"${v / 1_000_000:.2f}M"
+            if v >= 1_000:
+                return f"${v / 1_000:.1f}K"
+            return f"${v:.2f}"
+
+        kpi_data = [
+            ["Metric", "Value"],
+            ["Estimated Monthly Revenue Loss", _fmt_usd(monthly)],
+            ["Estimated Annual Revenue Loss", _fmt_usd(annual)],
+            ["Lost Customers per Month", f"{int(round(lost_customers)):,}"],
+            ["Model Confidence", f"{int(confidence * 100)}%"],
+        ]
+        kpi_table = Table(kpi_data, colWidths=[250, 170])
+        kpi_style = make_table_style(HIGHLIGHT)
+        kpi_style.add('TEXTCOLOR', (1, 1), (1, 2), DANGER)
+        kpi_table.setStyle(kpi_style)
+        elements.append(kpi_table)
+
+        elements.append(Spacer(1, 12))
+
+        # 5-layer breakdown table
+        layers = lost_revenue_data.get("layers", {})
+        layer_labels = [
+            ("l1_search_deflection", "L1 — Search Deflection"),
+            ("l2_zero_click_impression", "L2 — Zero-Click Impression"),
+            ("l3_competitive_displacement", "L3 — Competitive Displacement"),
+            ("l4_ai_channel", "L4 — AI Channel Loss"),
+            ("l5_ltv_cascade", "L5 — LTV Cascade"),
+        ]
+        if layers:
+            elements.append(Paragraph("5-Layer Attribution Breakdown", styles['SubHeader']))
+            layer_data = [["Attribution Layer", "Monthly Loss", "Annual Loss"]]
+            for key, label in layer_labels:
+                val = layers.get(key, 0)
+                layer_data.append([label, _fmt_usd(val), _fmt_usd(val * 12)])
+            layer_table = Table(layer_data, colWidths=[220, 100, 100])
+            layer_table.setStyle(make_table_style(ACCENT))
+            elements.append(layer_table)
+
+            # L4 sub-breakdown
+            l4_breakdown = lost_revenue_data.get("l4_breakdown", {})
+            if l4_breakdown:
+                elements.append(Spacer(1, 8))
+                elements.append(Paragraph("AI Channel Sub-Breakdown (L4)", styles['SubHeader']))
+                l4_data = [
+                    ["Channel", "Monthly Loss", "Annual Loss"],
+                    ["Chatbot (ChatGPT, Perplexity, etc.)",
+                     _fmt_usd(l4_breakdown.get("chatbot", 0)),
+                     _fmt_usd(l4_breakdown.get("chatbot", 0) * 12)],
+                    ["Voice Search",
+                     _fmt_usd(l4_breakdown.get("voice", 0)),
+                     _fmt_usd(l4_breakdown.get("voice", 0) * 12)],
+                ]
+                l4_table = Table(l4_data, colWidths=[220, 100, 100])
+                l4_table.setStyle(make_table_style(ACCENT))
+                elements.append(l4_table)
+
+        # Pie chart
+        if layers:
+            elements.append(Spacer(1, 12))
+            elements.append(Paragraph("Attribution Distribution", styles['SubHeader']))
+            layer_pie = _build_lost_revenue_pie(layers, layer_labels)
+            if layer_pie:
+                elements.append(layer_pie)
+
+        elements.append(Spacer(1, 8))
+        elements.append(Paragraph(
+            "<i>Note: Revenue figures are projections based on the 5-layer attribution model. "
+            "Actual impact may vary depending on search volumes, conversion rates, and market conditions.</i>",
+            styles['SmallText']
+        ))
+
+        elements.append(PageBreak())
 
     # ============================================================
     # SCORE BREAKDOWN

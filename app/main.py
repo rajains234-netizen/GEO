@@ -7,7 +7,7 @@ import os
 
 from app.database import init_db
 from app.config import get_settings
-from app.routes import checkout, webhook, status, download
+from app.routes import checkout, webhook, status, download, lost_revenue
 
 settings = get_settings()
 
@@ -24,6 +24,7 @@ app.add_middleware(
         settings.base_url,
         "http://localhost:5173",
         "http://localhost:3000",
+        "http://localhost:8000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -35,6 +36,7 @@ app.include_router(checkout.router, tags=["checkout"])
 app.include_router(webhook.router, tags=["webhook"])
 app.include_router(status.router, tags=["status"])
 app.include_router(download.router, tags=["download"])
+app.include_router(lost_revenue.router, tags=["lost-revenue"])
 
 
 @app.on_event("startup")
